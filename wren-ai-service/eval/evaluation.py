@@ -1,8 +1,11 @@
 import argparse
+import base64
+import os
 import sys
 from pathlib import Path
 from typing import Tuple
 
+import orjson
 from deepeval import evaluate
 from deepeval.evaluate import TestResult
 from deepeval.test_case import LLMTestCase
@@ -10,13 +13,15 @@ from langfuse import Langfuse
 from langfuse.decorators import langfuse_context, observe
 
 sys.path.append(f"{Path().parent.resolve()}")
-from eval.metrics.example import ExampleMetric
+from eval.metrics.column import AccuracyMetric
 from eval.utils import parse_toml
 from src import utils
 
 
 def formatter(prediction: dict) -> dict:
-    actual_output = str(prediction["actual_output"].get("post_process", {}))
+    actual_output = orjson.dumps(
+        prediction["actual_output"].get("post_process", {})
+    ).decode("utf-8")
     retrieval_context = [str(context) for context in prediction["retrieval_context"]]
     return {
         "input": prediction["input"],
@@ -104,7 +109,25 @@ if __name__ == "__main__":
     meta = predicted_file["meta"]
     predictions = predicted_file["predictions"]
 
-    evaluator = Evaluator([ExampleMetric()])
+    dataset = parse_toml(meta["evaluation_dataset"])
+    mdl = dataset["mdl"]
+
+    evaluator = Evaluator(
+        [
+            AccuracyMetric(
+                engine_config={
+                    "api_endpoint": os.getenv("WREN_IBIS_ENDPOINT"),
+                    "source": "bigquery",
+                    "manifest": base64.b64encode(orjson.dumps(mdl)).decode(),
+                    "connection_info": {
+                        "project_id": os.getenv("bigquery.project-id"),
+                        "dataset_id": os.getenv("bigquery.dataset-id"),
+                        "credentials": os.getenv("bigquery.credentials-key"),
+                    },
+                }
+            )
+        ]
+    )
     evaluator.eval(meta, predictions)
 
     langfuse_context.flush()
