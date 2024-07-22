@@ -1,8 +1,10 @@
+import { useMemo } from 'react';
 import clsx from 'clsx';
 import { Tag } from 'antd';
 import { groupBy } from 'lodash';
 import styled from 'styled-components';
-import { getReferenceIcon } from './utils';
+import { getReferenceIcon, Reference } from './utils';
+import env from '@/utils/env';
 
 const SQLWrapper = styled.div`
   position: absolute;
@@ -34,6 +36,11 @@ const SQLWrapper = styled.div`
   }
 `;
 
+interface Props {
+  sql: string;
+  references: Reference[];
+}
+
 const optimizedSnippet = (snippet: string) => {
   // SQL analysis may add more spaces and add brackets to the sql, so we need to handle it.
   return snippet
@@ -42,33 +49,50 @@ const optimizedSnippet = (snippet: string) => {
     .replace(/\s/g, '\\s*');
 };
 
-export default function SQLHighlight(props) {
+const createSnippetsRegex = (snippets: string[]) => {
+  return new RegExp(`(${snippets.join('|')})`, 'gi');
+};
+
+const printUnmatchedReferences = (
+  references: Reference[],
+  referenceMatches,
+) => {
+  // For debugging purpose
+  const unmatchedReferences = references.filter(
+    (reference) => !referenceMatches.flat().includes(reference),
+  );
+  if (unmatchedReferences.length > 0)
+    console.warn('Unmatched references:', unmatchedReferences);
+};
+
+export default function SQLHighlight(props: Props) {
   const { sql, references } = props;
 
-  const sqlArray = sql.split('\n');
-  const referenceGroups = groupBy(
-    references,
-    (reference) => reference.sqlLocation.line,
-  );
+  const sqlArray = useMemo(() => sql.split('\n'), [sql]);
+  const referenceGroups = useMemo(() => {
+    const filteredReferences = references.filter(
+      (reference) => reference.sqlLocation,
+    );
+    return groupBy(
+      filteredReferences,
+      (reference) => reference.sqlLocation.line,
+    );
+  }, [references]);
 
-  const result = [...sqlArray];
-
+  const highlights = [];
+  const referenceMatches = [];
   Object.keys(referenceGroups).forEach((line) => {
-    const index = Number(line) - 1;
+    const lineIndex = Number(line) - 1;
     const lineReferences = referenceGroups[line];
     const snippets = lineReferences.map((r) => optimizedSnippet(r.sqlSnippet));
-    const regex = new RegExp(`(${snippets.join('|')})`, 'gi');
+    const regex = createSnippetsRegex(snippets);
+    const parts = sqlArray[lineIndex].split(regex);
 
-    const parts = result[index].split(regex);
-    console.log(`full line: [${result[index]}]`);
-    console.log(`snippets: ${snippets}`, regex);
-    console.log('part', parts);
-    console.log('----------- divider -----------');
-
-    result[index] = parts.map((part, partIndex) => {
+    // Add to highlights if the part is matched
+    highlights[lineIndex] = parts.map((part, index) => {
       if (regex.test(part)) {
-        const matchedReferences = lineReferences.filter((snippet) =>
-          new RegExp(snippet).test(part),
+        const matchedReferences = lineReferences.filter((reference) =>
+          new RegExp(reference.sqlSnippet).test(part),
         );
         const tags = matchedReferences.map((reference) => {
           return (
@@ -83,18 +107,28 @@ export default function SQLHighlight(props) {
             </Tag>
           );
         });
+        // Record the matched references
+        referenceMatches.push(matchedReferences);
+
         return (
-          <mark key={partIndex}>
+          <mark key={index}>
             {part}
             {tags && <span className="tag-wrap">{tags}</span>}
           </mark>
         );
       }
-      return <span key={partIndex}>{part}</span>;
+      return <span key={index}>{part}</span>;
     });
   });
 
-  const content = result.map((line, index) => <div key={index}>{line}</div>);
+  const content = sqlArray.map((line, index) => (
+    <div key={index}>{highlights[index] || line}</div>
+  ));
+
+  // For debugging purpose
+  if (env.isDevelopment) {
+    printUnmatchedReferences(references, referenceMatches);
+  }
 
   return <SQLWrapper>{content}</SQLWrapper>;
 }
