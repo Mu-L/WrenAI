@@ -6,14 +6,14 @@ This document describes the evaluation framework for the Wren AI service. The ev
 
 - Install [Just](https://github.com/casey/just?tab=readme-ov-file#packages) to run the evaluation framework commands.
 - Set up the [Langfuse](https://cloud.langfuse.com) account and get the API key and secret. Fill in the `.env.dev` file with the key and secret.
-- Execute `make dev-up` to start the necessary development services.
+- Execute `just up` to start the necessary development services.
 
 ## Dataset Curation
 
 The dataset curation process is used to prepare the evaluation dataset for the Wren AI service on evaluation purpose. You can follow the steps below to start the curation app:
 
-- copy `.env.example` file to `.env` in the `eval/data_curation` folder and fill in the environment variables
-- execute the command under the `wren-ai-service` folder: `make data_curation_app`
+- copy `.env.example` to `.env` and fill in the environment variables
+- execute the command under the `wren-ai-service` folder: `just curate_eval_data`
 
 ## Prediction Process
 
@@ -22,6 +22,14 @@ The prediction process is used to produce the results of the evaluation data usi
 ```cli
 just predict <evaluation-dataset>
 ```
+
+Also, sub-pipeline predictions are supported by specifying the pipeline name:
+
+```cli
+just predict <evaluation-dataset> <pipeline-name>
+```
+
+Currently, we support the following pipelines: 'ask', 'generation', and 'retrieval'. If no pipeline name is specified, the default is the 'ask' pipeline.
 
 ## Evaluation Process
 
@@ -33,7 +41,7 @@ just eval <prediction-result>
 
 The evaluation results will be presented on Langfuse as follows:
 
-![](../docs/shallow_trace_example.png)
+![shallow_trace_example](../docs/shallow_trace_example.png)
 
 ## Terms
 

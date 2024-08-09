@@ -55,9 +55,18 @@ class IndexingService:
     async def prepare_semantics(
         self, prepare_semantics_request: SemanticsPreparationRequest
     ):
+        results = {
+            "metadata": {
+                "is_indexing_failed": False,
+            }
+        }
+
         try:
             logger.info(f"MDL: {prepare_semantics_request.mdl}")
-            await self._pipelines["indexing"].run(prepare_semantics_request.mdl)
+            await self._pipelines["indexing"].run(
+                mdl_str=prepare_semantics_request.mdl,
+                id=prepare_semantics_request.project_id,
+            )
 
             self._prepare_semantics_statuses[
                 prepare_semantics_request.mdl_hash
@@ -73,6 +82,10 @@ class IndexingService:
                 status="failed",
                 error=f"Failed to prepare semantics: {e}",
             )
+
+            results["metadata"]["indexing_failed"] = True
+
+        return results
 
     def get_prepare_semantics_status(
         self, prepare_semantics_status_request: SemanticsPreparationStatusRequest

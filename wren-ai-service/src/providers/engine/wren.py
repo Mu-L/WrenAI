@@ -23,6 +23,7 @@ class WrenUI(Engine):
         sql: str,
         session: aiohttp.ClientSession,
         project_id: str | None = None,
+        **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
             f"{self._endpoint}/api/graphql",
@@ -67,9 +68,10 @@ class WrenIbis(Engine):
         self,
         sql: str,
         session: aiohttp.ClientSession,
+        **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.post(
-            f"{self._endpoint}/v2/connector/{self._source}/query?dryRun=true",
+            f"{self._endpoint}/v2/connector/{self._source}/query?dryRun=true&limit=1",
             json={
                 "sql": remove_limit_statement(add_quotes(sql)),
                 "manifestStr": self._manifest,
@@ -96,6 +98,7 @@ class WrenEngine(Engine):
         properties: Dict[str, Any] = {
             "manifest": os.getenv("WREN_ENGINE_MANIFEST"),
         },
+        **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         async with session.get(
             f"{self._endpoint}/v1/mdl/dry-run",
@@ -104,6 +107,7 @@ class WrenEngine(Engine):
                 if properties.get("manifest")
                 else {},
                 "sql": remove_limit_statement(add_quotes(sql)),
+                "limit": 1,
             },
         ) as response:
             if response.status == 200:
